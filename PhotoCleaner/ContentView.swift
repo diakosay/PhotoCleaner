@@ -161,11 +161,11 @@ struct ContentView: View {
                 .foregroundStyle(.secondary)
 
             if !viewModel.deleteBatch.isEmpty {
-                Button("Review Deletions") {
+                Button("Finish") {
                     viewModel.presentSummary()
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.red)
+                .tint(.green)
             }
         }
         .padding()
@@ -202,6 +202,16 @@ struct ContentView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            if viewModel.showFinishButton {
+                Button("Finish") {
+                    viewModel.presentSummary()
+                }
+                .fontWeight(.semibold)
+                .foregroundStyle(.green)
+            }
+        }
+
         ToolbarItem(placement: .topBarTrailing) {
             Button {
                 showSettings = true
@@ -209,14 +219,6 @@ struct ContentView: View {
                 Image(systemName: "gearshape")
             }
             .accessibilityLabel("Settings")
-        }
-
-        if viewModel.canUndo {
-            ToolbarItem(placement: .topBarLeading) {
-                Button("Undo") {
-                    viewModel.undoLastSwipe()
-                }
-            }
         }
     }
 }

@@ -20,6 +20,9 @@ final class PhotoLibraryViewModel: ObservableObject {
     var canUndo: Bool { !swipeHistory.isEmpty }
     var remainingCount: Int { assets.count }
     var deletedCount: Int { deleteBatch.count }
+    var showFinishButton: Bool {
+        assets.isEmpty && !deleteBatch.isEmpty && !instantDeleteMode
+    }
 
     func requestPhotoAccess() async {
         let status = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
@@ -33,26 +36,56 @@ final class PhotoLibraryViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
 
-        let fetchOptions = PHFetchOptions()
-        fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
-        fetchOptions.predicate = NSPredicate(
-            format: "mediaType == %d OR mediaType == %d",
-            PHAssetMediaType.image.rawValue,
-            PHAssetMediaType.video.rawValue
-        )
-
-        let result = PHAsset.fetchAssets(with: fetchOptions)
-        var fetched: [PHAsset] = []
-        fetched.reserveCapacity(result.count)
-
-        result.enumerateObjects { asset, _, _ in
-            fetched.append(asset)
-        }
-
-        assets = fetched
-        deleteBatch = []
+        assets = fetchAllMediaAssets()
         swipeHistory = []
         showSummary = false
+        deleteBatch = []
+    }
+
+    func loadLastN(_ count: Int) async -> Bool {
+        guard count > 0 else {
+            errorMessage = "Please enter a number greater than zero."
+            return false
+        }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        let fetched = Array(fetchAllMediaAssets().prefix(count))
+        return applyFilteredAssets(fetched, clearDeleteBatch: false)
+    }
+
+    func loadRandom(_ count: Int) async -> Bool {
+        guard count > 0 else {
+            errorMessage = "Please enter a number greater than zero."
+            return false
+        }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        let all = fetchAllMediaAssets()
+        let limit = min(count, all.count)
+        let fetched = Array(all.shuffled().prefix(limit))
+        return applyFilteredAssets(fetched, clearDeleteBatch: false)
+    }
+
+    func loadDateRange(from startDate: Date, to endDate: Date) async -> Bool {
+        let range = normalizedDateRange(from: startDate, to: endDate)
+        guard range.start <= range.end else {
+            errorMessage = "The start date must be on or before the end date."
+            return false
+        }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        let fetched = fetchAllMediaAssets().filter { asset in
+            guard let creationDate = asset.creationDate else { return false }
+            return creationDate >= range.start && creationDate <= range.end
+        }
+
+        return applyFilteredAssets(fetched, clearDeleteBatch: false)
     }
 
     func handleSwipeKeep() {
@@ -168,9 +201,52 @@ final class PhotoLibraryViewModel: ObservableObject {
     }
 
     private func advanceIfFinished() {
-        if assets.isEmpty {
-            showSummary = !instantDeleteMode && !deleteBatch.isEmpty
+        // Summary is shown manually via the Finish button.
+    }
+
+    @discardableResult
+    private func applyFilteredAssets(_ fetched: [PHAsset], clearDeleteBatch: Bool) -> Bool {
+        guard !fetched.isEmpty else {
+            errorMessage = "No photos or videos found for this filter."
+            return false
         }
+
+        assets = fetched
+        swipeHistory = []
+        showSummary = false
+
+        if clearDeleteBatch {
+            deleteBatch = []
+        }
+
+        return true
+    }
+
+    private func fetchAllMediaAssets() -> [PHAsset] {
+        let fetchOptions = PHFetchOptions()
+        fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+        fetchOptions.predicate = NSPredicate(
+            format: "mediaType == %d OR mediaType == %d",
+            PHAssetMediaType.image.rawValue,
+            PHAssetMediaType.video.rawValue
+        )
+
+        let result = PHAsset.fetchAssets(with: fetchOptions)
+        var fetched: [PHAsset] = []
+        fetched.reserveCapacity(result.count)
+
+        result.enumerateObjects { asset, _, _ in
+            fetched.append(asset)
+        }
+
+        return fetched
+    }
+
+    private func normalizedDateRange(from startDate: Date, to endDate: Date) -> (start: Date, end: Date) {
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: startDate)
+        let end = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: endDate) ?? endDate
+        return (start, end)
     }
 
     private func assetExists(_ asset: PHAsset) -> Bool {
