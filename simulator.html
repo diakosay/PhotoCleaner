@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Photo Cleaner — Simulator</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green: #34c759;
+      --red: #ff3b30;
+      --blue: #007aff;
+      --bg: #f2f2f7;
+      --card-shadow: 0 8px 32px rgba(0,0,0,0.14);
+      --radius: 20px;
+      --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: var(--font);
+      background: var(--bg);
+      color: #1c1c1e;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Layout ── */
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      max-width: 430px;
+      margin: 0 auto;
+      background: var(--bg);
+      position: relative;
+    }
+
+    /* ── Nav bar ── */
+    .navbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px 8px;
+      background: var(--bg);
+      flex-shrink: 0;
+    }
+    .navbar h1 {
+      font-size: 17px;
+      font-weight: 600;
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+    .nav-btn {
+      background: none;
+      border: none;
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--blue);
+      cursor: pointer;
+      padding: 4px 0;
+      font-family: var(--font);
+    }
+    .nav-btn:disabled { color: #c7c7cc; cursor: default; }
+    .nav-btn.icon { font-size: 22px; color: #3c3c43; }
+
+    /* ── Stats bar ── */
+    .stats {
+      display: flex;
+      gap: 12px;
+      padding: 4px 20px 12px;
+      flex-shrink: 0;
+    }
+    .stat-pill {
+      background: rgba(255,255,255,0.72);
+      backdrop-filter: blur(12px);
+      border-radius: 12px;
+      padding: 8px 14px;
+      flex: 1;
+    }
+    .stat-pill .label { font-size: 12px; color: #8e8e93; }
+    .stat-pill .value { font-size: 20px; font-weight: 600; margin-top: 2px; }
+    .stat-pill.delete .value { color: var(--red); }
+
+    /* ── Card stack area ── */
+    .stack-area {
+      flex: 1;
+      position: relative;
+      margin: 0 20px;
+      min-height: 0;
+    }
+
+    .card {
+      position: absolute;
+      inset: 0;
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: #fff;
+      box-shadow: var(--card-shadow);
+      user-select: none;
+      touch-action: none;
+      will-change: transform;
+    }
+    .card img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      pointer-events: none;
+      display: block;
+    }
+    .card .size-badge {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      background: rgba(255,255,255,0.75);
+      backdrop-filter: blur(8px);
+      border-radius: 20px;
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #1c1c1e;
+    }
+    .card .overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      border-radius: var(--radius);
+      opacity: 0;
+      transition: opacity 0.05s;
+    }
+    .card .overlay.keep { background: rgba(52,199,89,0.28); }
+    .card .overlay.delete { background: rgba(255,59,48,0.28); }
+    .card .swipe-label {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      padding: 10px 18px;
+      border-radius: 30px;
+      background: rgba(255,255,255,0.82);
+      backdrop-filter: blur(8px);
+      opacity: 0;
+      pointer-events: none;
+    }
+    .card .swipe-label.keep {
+      left: 24px;
+      color: var(--green);
+      border: 2.5px solid var(--green);
+    }
+    .card .swipe-label.delete {
+      right: 24px;
+      color: var(--red);
+      border: 2.5px solid var(--red);
+    }
+
+    /* ── Bottom hints + buttons ── */
+    .bottom-bar {
+      flex-shrink: 0;
+      padding: 12px 20px 24px;
+    }
+    .hints {
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      margin-bottom: 14px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .hints .delete-hint { color: var(--red); }
+    .hints .keep-hint { color: var(--green); }
+    .hints .undo-hint {
+      background: none;
+      border: none;
+      font-family: var(--font);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--blue);
+      cursor: pointer;
+      padding: 4px 12px;
+    }
+    .hints .undo-hint:disabled { color: #c7c7cc; cursor: default; }
+
+    .action-row {
+      display: flex;
+      gap: 12px;
+    }
+    .action-btn {
+      flex: 1;
+      padding: 14px;
+      border: none;
+      border-radius: 14px;
+      font-family: var(--font);
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.1s, opacity 0.1s;
+    }
+    .action-btn:active { transform: scale(0.96); opacity: 0.85; }
+    .action-btn.delete { background: #ffebea; color: var(--red); }
+    .action-btn.undo { background: rgba(255,255,255,0.85); color: var(--blue); border: 1px solid #d1d1d6; }
+    .action-btn.keep { background: #e8f9ed; color: var(--green); }
+    .action-btn:disabled { opacity: 0.4; cursor: default; transform: none; }
+
+    /* ── Settings modal ── */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 100;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal-sheet {
+      background: #fff;
+      border-radius: 14px 14px 0 0;
+      width: 100%;
+      max-width: 430px;
+      padding: 20px 20px 36px;
+      animation: slideUp 0.28s ease;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .modal-header h2 { font-size: 18px; font-weight: 700; }
+    .modal-close {
+      background: none; border: none;
+      font-size: 16px; font-weight: 600;
+      color: var(--blue); cursor: pointer;
+      font-family: var(--font);
+    }
+    .setting-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 0;
+      border-bottom: 1px solid #e5e5ea;
+    }
+    .setting-row .info h3 { font-size: 16px; font-weight: 600; }
+    .setting-row .info p { font-size: 13px; color: #8e8e93; margin-top: 4px; line-height: 1.4; }
+    .toggle {
+      width: 51px; height: 31px;
+      background: #e9e9ea;
+      border-radius: 16px;
+      position: relative;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.2s;
+      border: none;
+      padding: 0;
+    }
+    .toggle.on { background: var(--green); }
+    .toggle::after {
+      content: '';
+      position: absolute;
+      top: 2px; left: 2px;
+      width: 27px; height: 27px;
+      background: #fff;
+      border-radius: 50%;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+      transition: transform 0.2s;
+    }
+    .toggle.on::after { transform: translateX(20px); }
+
+    .guide-section { margin-top: 16px; }
+    .guide-section h4 { font-size: 13px; color: #8e8e93; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+    .guide-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; font-size: 15px; font-weight: 500; }
+    .guide-item.green { color: var(--green); }
+    .guide-item.red { color: var(--red); }
+
+    /* ── Summary screen ── */
+    #summary {
+      display: none;
+      flex-direction: column;
+      height: 100%;
+      max-width: 430px;
+      margin: 0 auto;
+      background: var(--bg);
+    }
+    #summary.visible { display: flex; }
+    .summary-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+    }
+    .summary-content h2 { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
+    .summary-content .subtitle { font-size: 15px; color: #8e8e93; line-height: 1.5; margin-bottom: 24px; }
+    .summary-stats {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .summary-stat {
+      flex: 1;
+      background: #fff;
+      border-radius: 14px;
+      padding: 16px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .summary-stat .num { font-size: 32px; font-weight: 700; }
+    .summary-stat .lbl { font-size: 13px; color: #8e8e93; margin-top: 4px; }
+    .summary-stat.kept .num { color: var(--green); }
+    .summary-stat.deleted .num { color: var(--red); }
+
+    .thumb-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+    }
+    .thumb-grid img {
+      width: 100%;
+      aspect-ratio: 1;
+      object-fit: cover;
+      border-radius: 8px;
+    }
+    .summary-footer {
+      padding: 16px 20px 28px;
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: blur(12px);
+      border-top: 1px solid #e5e5ea;
+    }
+    .confirm-btn {
+      width: 100%;
+      padding: 16px;
+      background: var(--red);
+      color: #fff;
+      border: none;
+      border-radius: 14px;
+      font-family: var(--font);
+      font-size: 17px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .confirm-btn:active { opacity: 0.85; }
+    .back-btn {
+      width: 100%;
+      padding: 14px;
+      background: none;
+      border: none;
+      color: var(--blue);
+      font-family: var(--font);
+      font-size: 16px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+
+    /* ── Empty / done inline ── */
+    .done-msg {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      text-align: center;
+      padding: 20px;
+    }
+    .done-msg.visible { display: flex; }
+    .done-msg .icon { font-size: 56px; margin-bottom: 12px; }
+    .done-msg h2 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+    .done-msg p { color: #8e8e93; font-size: 15px; margin-bottom: 20px; }
+    .review-btn {
+      padding: 12px 28px;
+      background: var(--red);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-family: var(--font);
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* ── Simulator badge ── */
+    .sim-badge {
+      position: fixed;
+      bottom: 6px;
+      right: 8px;
+      font-size: 10px;
+      color: #aeaeb2;
+      background: rgba(255,255,255,0.6);
+      padding: 3px 8px;
+      border-radius: 6px;
+      z-index: 200;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════ MAIN APP ═══════════════ -->
+<div id="app">
+  <div class="navbar">
+    <button class="nav-btn" id="navUndo" disabled>Undo</button>
+    <h1>Photo Cleaner</h1>
+    <button class="nav-btn icon" id="navSettings" title="Settings">⚙️</button>
+  </div>
+
+  <div class="stats">
+    <div class="stat-pill">
+      <div class="label">Remaining</div>
+      <div class="value" id="statRemaining">20</div>
+    </div>
+    <div class="stat-pill delete" id="statDeletePill">
+      <div class="label">To Delete</div>
+      <div class="value" id="statDelete">0</div>
+    </div>
+  </div>
+
+  <div class="stack-area" id="stackArea">
+    <div class="done-msg" id="doneMsg">
+      <div class="icon">✅</div>
+      <h2>All caught up!</h2>
+      <p id="doneText">No more photos in this session.</p>
+      <button class="review-btn" id="reviewBtn" style="display:none">Review Deletions</button>
+    </div>
+  </div>
+
+  <div class="bottom-bar" id="bottomBar">
+    <div class="hints">
+      <span class="delete-hint">← Delete</span>
+      <button class="undo-hint" id="hintUndo" disabled>↩ Undo</button>
+      <span class="keep-hint">Keep →</span>
+    </div>
+    <div class="action-row">
+      <button class="action-btn delete" id="btnDelete">Delete</button>
+      <button class="action-btn undo" id="btnUndo" disabled>Undo</button>
+      <button class="action-btn keep" id="btnKeep">Keep</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ SUMMARY SCREEN ═══════════════ -->
+<div id="summary">
+  <div class="navbar">
+    <button class="nav-btn" id="summaryBack">← Back</button>
+    <h1>Review Deletions</h1>
+    <span style="width:48px"></span>
+  </div>
+  <div class="summary-content">
+    <h2 id="summaryTitle">0 items selected</h2>
+    <p class="subtitle">These photos would be moved to Recently Deleted on a real iPhone. In this simulator, tapping Confirm just shows an alert.</p>
+    <div class="summary-stats">
+      <div class="summary-stat kept">
+        <div class="num" id="summaryKept">0</div>
+        <div class="lbl">Kept</div>
+      </div>
+      <div class="summary-stat deleted">
+        <div class="num" id="summaryDeleted">0</div>
+        <div class="lbl">To Delete</div>
+      </div>
+    </div>
+    <div class="thumb-grid" id="thumbGrid"></div>
+  </div>
+  <div class="summary-footer">
+    <button class="confirm-btn" id="confirmDelete">Confirm Delete</button>
+    <button class="back-btn" id="summaryBack2">Go Back</button>
+  </div>
+</div>
+
+<!-- ═══════════════ SETTINGS MODAL ═══════════════ -->
+<div class="modal-backdrop" id="settingsModal">
+  <div class="modal-sheet">
+    <div class="modal-header">
+      <h2>Settings</h2>
+      <button class="modal-close" id="closeSettings">Done</button>
+    </div>
+    <div class="setting-row">
+      <div class="info">
+        <h3>Instant Delete Mode</h3>
+        <p>When enabled, swiping left shows an instant delete alert instead of batching photos for review.</p>
+      </div>
+      <button class="toggle" id="instantToggle" aria-label="Instant Delete Mode"></button>
+    </div>
+    <div class="guide-section">
+      <h4>How to Swipe</h4>
+      <div class="guide-item green">→ Swipe right to keep</div>
+      <div class="guide-item red">← Swipe left to delete</div>
+    </div>
+  </div>
+</div>
+
+<div class="sim-badge">Browser Simulator · Windows</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const SWIPE_THRESHOLD = 100;
+  const TOTAL_PHOTOS = 20;
+  const FAKE_SIZES = ['1.2 MB','890 KB','2.4 MB','3.1 MB','560 KB','1.8 MB','4.2 MB','720 KB','2.0 MB','1.5 MB',
+                      '980 KB','3.6 MB','640 KB','2.8 MB','1.1 MB','4.5 MB','770 KB','2.2 MB','1.9 MB','3.0 MB'];
+
+  // ── State ──
+  let photos = [];
+  let stack = [];          // indices into photos[], front = top card
+  let deleteBatch = [];    // indices
+  let keptCount = 0;
+  let history = [];        // { photoIdx, action: 'keep'|'delete', instant }
+  let instantDeleteMode = false;
+
+  // ── Drag state ──
+  let dragging = false;
+  let dragStartX = 0, dragStartY = 0;
+  let dragX = 0;
+  let activeCardEl = null;
+
+  // ── DOM refs ──
+  const stackArea     = document.getElementById('stackArea');
+  const doneMsg       = document.getElementById('doneMsg');
+  const doneText      = document.getElementById('doneText');
+  const reviewBtn     = document.getElementById('reviewBtn');
+  const bottomBar     = document.getElementById('bottomBar');
+  const statRemaining = document.getElementById('statRemaining');
+  const statDelete    = document.getElementById('statDelete');
+  const statDeletePill= document.getElementById('statDeletePill');
+  const navUndo       = document.getElementById('navUndo');
+  const hintUndo      = document.getElementById('hintUndo');
+  const btnUndo       = document.getElementById('btnUndo');
+  const btnDelete     = document.getElementById('btnDelete');
+  const btnKeep       = document.getElementById('btnKeep');
+  const settingsModal = document.getElementById('settingsModal');
+  const instantToggle = document.getElementById('instantToggle');
+  const summaryEl     = document.getElementById('summary');
+  const appEl         = document.getElementById('app');
+
+  // ── Init photos ──
+  function initPhotos() {
+    photos = Array.from({ length: TOTAL_PHOTOS }, (_, i) => ({
+      id: i,
+      url: `https://picsum.photos/400/600?random=${i + 1}`,
+      size: FAKE_SIZES[i],
+    }));
+    stack = photos.map((_, i) => i);
+    deleteBatch = [];
+    keptCount = 0;
+    history = [];
+    renderStack();
+    updateUI();
+  }
+
+  // ── Render card stack (top 3) ──
+  function renderStack() {
+    // Remove old cards (keep doneMsg)
+    stackArea.querySelectorAll('.card').forEach(c => c.remove());
+
+    if (stack.length === 0) {
+      doneMsg.classList.add('visible');
+      if (instantDeleteMode || deleteBatch.length === 0) {
+        doneText.textContent = instantDeleteMode
+          ? 'All photos reviewed. Instant deletes were processed immediately.'
+          : 'No more photos in this session.';
+        reviewBtn.style.display = 'none';
+      } else {
+        doneText.textContent = 'Review your deletion batch to finish.';
+        reviewBtn.style.display = 'block';
+      }
+      return;
+    }
+
+    doneMsg.classList.remove('visible');
+    const visible = stack.slice(0, 3);
+
+    visible.forEach((photoIdx, depth) => {
+      const p = photos[photoIdx];
+      const isTop = depth === visible.length - 1;
+      const scale = 1 - (visible.length - 1 - depth) * 0.04;
+      const yOff  = (visible.length - 1 - depth) * 10;
+
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.dataset.idx = photoIdx;
+      card.style.transform = `scale(${scale}) translateY(${yOff}px)`;
+      card.style.zIndex = depth + 1;
+      if (!isTop) card.style.pointerEvents = 'none';
+
+      card.innerHTML = `
+        <img src="${p.url}" alt="Photo ${p.id + 1}" draggable="false" />
+        <div class="size-badge">${p.size}</div>
+        <div class="overlay keep"></div>
+        <div class="overlay delete"></div>
+        <div class="swipe-label keep">✓ KEEP</div>
+        <div class="swipe-label delete">✕ DELETE</div>
+      `;
+
+      if (isTop) bindDrag(card);
+      stackArea.appendChild(card);
+    });
+  }
+
+  // ── Drag handlers (mouse + touch) ──
+  function bindDrag(card) {
+    card.addEventListener('mousedown', onDragStart);
+    card.addEventListener('touchstart', onDragStart, { passive: true });
+  }
+
+  function onDragStart(e) {
+    if (stack.length === 0) return;
+    const point = e.touches ? e.touches[0] : e;
+    dragging = true;
+    activeCardEl = e.currentTarget;
+    dragStartX = point.clientX;
+    dragStartY = point.clientY;
+    dragX = 0;
+    activeCardEl.style.transition = 'none';
+
+    document.addEventListener('mousemove', onDragMove);
+    document.addEventListener('mouseup', onDragEnd);
+    document.addEventListener('touchmove', onDragMove, { passive: false });
+    document.addEventListener('touchend', onDragEnd);
+  }
+
+  function onDragMove(e) {
+    if (!dragging || !activeCardEl) return;
+    e.preventDefault();
+    const point = e.touches ? e.touches[0] : e;
+    dragX = point.clientX - dragStartX;
+    const dragY = (point.clientY - dragStartY) * 0.15;
+    const rot = dragX / 18;
+
+    activeCardEl.style.transform = `translate(${dragX}px, ${dragY}px) rotate(${rot}deg)`;
+
+    const progress = Math.min(Math.abs(dragX) / SWIPE_THRESHOLD, 1);
+    const keepOvl = activeCardEl.querySelector('.overlay.keep');
+    const delOvl  = activeCardEl.querySelector('.overlay.delete');
+    const keepLbl = activeCardEl.querySelector('.swipe-label.keep');
+    const delLbl  = activeCardEl.querySelector('.swipe-label.delete');
+
+    keepOvl.style.opacity = dragX > 20 ? progress : 0;
+    delOvl.style.opacity  = dragX < -20 ? progress : 0;
+    keepLbl.style.opacity = dragX > 20 ? progress : 0;
+    delLbl.style.opacity  = dragX < -20 ? progress : 0;
+  }
+
+  function onDragEnd() {
+    if (!dragging) return;
+    document.removeEventListener('mousemove', onDragMove);
+    document.removeEventListener('mouseup', onDragEnd);
+    document.removeEventListener('touchmove', onDragMove);
+    document.removeEventListener('touchend', onDragEnd);
+
+    dragging = false;
+
+    if (dragX > SWIPE_THRESHOLD) {
+      flyCard(activeCardEl, 1, () => performKeep());
+    } else if (dragX < -SWIPE_THRESHOLD) {
+      flyCard(activeCardEl, -1, () => performDelete());
+    } else {
+      resetCard(activeCardEl);
+    }
+
+    activeCardEl = null;
+    dragX = 0;
+  }
+
+  function flyCard(card, direction, callback) {
+    card.style.transition = 'transform 0.22s ease-out, opacity 0.22s';
+    card.style.transform = `translate(${direction * 600}px, 0) rotate(${direction * 20}deg)`;
+    card.style.opacity = '0';
+    setTimeout(callback, 220);
+  }
+
+  function resetCard(card) {
+    card.style.transition = 'transform 0.35s cubic-bezier(0.34,1.56,0.64,1)';
+    card.style.transform = '';
+    const overlays = card.querySelectorAll('.overlay, .swipe-label');
+    overlays.forEach(el => el.style.opacity = 0);
+  }
+
+  // ── Actions ──
+  function performKeep() {
+    if (stack.length === 0) return;
+    const idx = stack.shift();
+    keptCount++;
+    history.push({ photoIdx: idx, action: 'keep', instant: false });
+    afterAction();
+  }
+
+  function performDelete() {
+    if (stack.length === 0) return;
+    const idx = stack.shift();
+
+    if (instantDeleteMode) {
+      history.push({ photoIdx: idx, action: 'delete', instant: true });
+      alert(`🗑 Instant Delete\n\nPhoto #${idx + 1} (${photos[idx].size}) would be deleted immediately on iPhone.\n\n(In this simulator, nothing is actually removed.)`);
+    } else {
+      deleteBatch.push(idx);
+      history.push({ photoIdx: idx, action: 'delete', instant: false });
+    }
+    afterAction();
+  }
+
+  function afterAction() {
+    renderStack();
+    updateUI();
+
+    if (stack.length === 0 && !instantDeleteMode && deleteBatch.length > 0) {
+      setTimeout(showSummary, 400);
+    }
+  }
+
+  function undo() {
+    if (history.length === 0) return;
+    const last = history.pop();
+
+    if (last.action === 'keep') {
+      keptCount--;
+      stack.unshift(last.photoIdx);
+    } else if (last.action === 'delete') {
+      if (!last.instant) {
+        const bi = deleteBatch.indexOf(last.photoIdx);
+        if (bi !== -1) deleteBatch.splice(bi, 1);
+      }
+      stack.unshift(last.photoIdx);
+    }
+
+    summaryEl.classList.remove('visible');
+    appEl.style.display = 'flex';
+    renderStack();
+    updateUI();
+  }
+
+  // ── UI updates ──
+  function updateUI() {
+    statRemaining.textContent = stack.length;
+    statDelete.textContent = deleteBatch.length;
+
+    const canUndo = history.length > 0;
+    navUndo.disabled = !canUndo;
+    hintUndo.disabled = !canUndo;
+    btnUndo.disabled = !canUndo;
+
+    statDeletePill.style.visibility = instantDeleteMode ? 'hidden' : 'visible';
+    btnDelete.disabled = stack.length === 0;
+    btnKeep.disabled = stack.length === 0;
+  }
+
+  // ── Summary ──
+  function showSummary() {
+    document.getElementById('summaryTitle').textContent =
+      `${deleteBatch.length} item${deleteBatch.length === 1 ? '' : 's'} selected`;
+    document.getElementById('summaryKept').textContent = keptCount;
+    document.getElementById('summaryDeleted').textContent = deleteBatch.length;
+
+    const grid = document.getElementById('thumbGrid');
+    grid.innerHTML = '';
+    deleteBatch.forEach(idx => {
+      const img = document.createElement('img');
+      img.src = photos[idx].url;
+      img.alt = `Delete candidate ${idx + 1}`;
+      grid.appendChild(img);
+    });
+
+    appEl.style.display = 'none';
+    summaryEl.classList.add('visible');
+  }
+
+  function hideSummary() {
+    summaryEl.classList.remove('visible');
+    appEl.style.display = 'flex';
+  }
+
+  function confirmDelete() {
+    alert(
+      `✅ Confirmed Delete\n\n` +
+      `${deleteBatch.length} photo${deleteBatch.length === 1 ? '' : 's'} would be permanently removed via PHPhotoLibrary.performChanges on iPhone.\n\n` +
+      `${keptCount} photo${keptCount === 1 ? ' was' : 's were'} kept.\n\n` +
+      `(Simulator only — no files deleted.)`
+    );
+    deleteBatch = [];
+    history = history.filter(h => !(h.action === 'delete' && !h.instant));
+    hideSummary();
+    updateUI();
+    renderStack();
+  }
+
+  // ── Button / modal wiring ──
+  document.getElementById('navSettings').addEventListener('click', () => settingsModal.classList.add('open'));
+  document.getElementById('closeSettings').addEventListener('click', () => settingsModal.classList.remove('open'));
+  settingsModal.addEventListener('click', e => { if (e.target === settingsModal) settingsModal.classList.remove('open'); });
+
+  instantToggle.addEventListener('click', () => {
+    instantDeleteMode = !instantDeleteMode;
+    instantToggle.classList.toggle('on', instantDeleteMode);
+    updateUI();
+    if (stack.length === 0) renderStack();
+  });
+
+  navUndo.addEventListener('click', undo);
+  hintUndo.addEventListener('click', undo);
+  btnUndo.addEventListener('click', undo);
+  btnDelete.addEventListener('click', () => { if (stack.length) performDeleteWithAnimation(-1); });
+  btnKeep.addEventListener('click', () => { if (stack.length) performDeleteWithAnimation(1); });
+
+  function performDeleteWithAnimation(direction) {
+    const card = stackArea.querySelector('.card:last-of-type') ||
+                 [...stackArea.querySelectorAll('.card')].pop();
+    if (!card) return;
+    flyCard(card, direction, () => direction === 1 ? performKeep() : performDelete());
+  }
+
+  reviewBtn.addEventListener('click', showSummary);
+  document.getElementById('summaryBack').addEventListener('click', hideSummary);
+  document.getElementById('summaryBack2').addEventListener('click', hideSummary);
+  document.getElementById('confirmDelete').addEventListener('click', confirmDelete);
+
+  // Keyboard shortcuts for laptop testing
+  document.addEventListener('keydown', e => {
+    if (summaryEl.classList.contains('visible')) return;
+    if (e.key === 'ArrowRight') performDeleteWithAnimation(1);
+    if (e.key === 'ArrowLeft')  performDeleteWithAnimation(-1);
+    if (e.key === 'z' && (e.ctrlKey || e.metaKey)) undo();
+  });
+
+  // ── Boot ──
+  initPhotos();
+})();
+</script>
+</body>
+</html>
