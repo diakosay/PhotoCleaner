@@ -1,10 +1,24 @@
 import Photos
 import SwiftUI
+import UIKit
 
 struct ContentView: View {
     @EnvironmentObject private var viewModel: PhotoLibraryViewModel
 
     @State private var showSettings = false
+
+    private var summaryBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.showSummary },
+            set: { newValue in
+                if newValue {
+                    viewModel.presentSummary()
+                } else {
+                    viewModel.dismissSummary()
+                }
+            }
+        )
+    }
 
     var body: some View {
         NavigationStack {
@@ -27,9 +41,11 @@ struct ContentView: View {
             .toolbar { toolbarContent }
             .sheet(isPresented: $showSettings) {
                 SettingsView()
+                    .environmentObject(viewModel)
             }
-            .fullScreenCover(isPresented: $viewModel.showSummary) {
+            .fullScreenCover(isPresented: summaryBinding) {
                 DeleteSummaryView()
+                    .environmentObject(viewModel)
             }
             .alert(
                 "Unable to Undo",
@@ -76,8 +92,8 @@ struct ContentView: View {
                 } else if !viewModel.assets.isEmpty {
                     CardStackView(
                         assets: viewModel.assets,
-                        onSwipeKeep: viewModel.handleSwipeKeep,
-                        onSwipeDelete: viewModel.handleSwipeDelete
+                        onSwipeKeep: { viewModel.handleSwipeKeep() },
+                        onSwipeDelete: { viewModel.handleSwipeDelete() }
                     )
                 }
             }

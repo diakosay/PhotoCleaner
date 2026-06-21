@@ -9,18 +9,16 @@ struct CardStackView: View {
     var body: some View {
         ZStack {
             ForEach(Array(visibleAssets.enumerated()), id: \.element.localIdentifier) { index, asset in
-                let isTop = index == visibleAssets.count - 1
-
                 SwipeableCardView(
                     asset: asset,
-                    isInteractive: isTop,
+                    isInteractive: index == visibleAssets.count - 1,
                     onSwipeKeep: onSwipeKeep,
                     onSwipeDelete: onSwipeDelete
                 )
                 .scaleEffect(scale(for: index, total: visibleAssets.count))
                 .offset(y: yOffset(for: index, total: visibleAssets.count))
                 .zIndex(Double(index))
-                .allowsHitTesting(isTop)
+                .allowsHitTesting(index == visibleAssets.count - 1)
             }
         }
         .padding(.horizontal, 20)

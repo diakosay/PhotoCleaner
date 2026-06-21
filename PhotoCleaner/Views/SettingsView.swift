@@ -4,11 +4,18 @@ struct SettingsView: View {
     @EnvironmentObject private var viewModel: PhotoLibraryViewModel
     @Environment(\.dismiss) private var dismiss
 
+    private var instantDeleteBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.instantDeleteMode },
+            set: { viewModel.setInstantDeleteMode($0) }
+        )
+    }
+
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    Toggle(isOn: $viewModel.instantDeleteMode) {
+                    Toggle(isOn: instantDeleteBinding) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Instant Delete Mode")
                                 .font(.body.weight(.semibold))

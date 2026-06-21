@@ -1,5 +1,6 @@
 import Photos
 import SwiftUI
+import UIKit
 
 struct DeleteSummaryView: View {
     @EnvironmentObject private var viewModel: PhotoLibraryViewModel

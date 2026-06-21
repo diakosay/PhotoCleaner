@@ -4,6 +4,8 @@ import SwiftUI
 
 @MainActor
 final class PhotoLibraryViewModel: ObservableObject {
+    private static let instantDeleteModeKey = "instantDeleteMode"
+
     @Published private(set) var assets: [PHAsset] = []
     @Published private(set) var deleteBatch: [PHAsset] = []
     @Published private(set) var swipeHistory: [SwipeRecord] = []
@@ -13,7 +15,7 @@ final class PhotoLibraryViewModel: ObservableObject {
     @Published private(set) var errorMessage: String?
     @Published private(set) var undoUnavailableMessage: String?
 
-    @AppStorage("instantDeleteMode") var instantDeleteMode = false
+    @Published var instantDeleteMode: Bool = UserDefaults.standard.bool(forKey: "instantDeleteMode")
 
     var canUndo: Bool { !swipeHistory.isEmpty }
     var remainingCount: Int { assets.count }
@@ -141,6 +143,11 @@ final class PhotoLibraryViewModel: ObservableObject {
 
     func clearErrorMessage() {
         errorMessage = nil
+    }
+
+    func setInstantDeleteMode(_ enabled: Bool) {
+        instantDeleteMode = enabled
+        UserDefaults.standard.set(enabled, forKey: Self.instantDeleteModeKey)
     }
 
     // MARK: - Private

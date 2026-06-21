@@ -123,7 +123,7 @@ struct SwipeableCardView: View {
 
     private func completeSwipe(direction: CGFloat, action: @escaping () -> Void) {
         withAnimation(.easeOut(duration: 0.22)) {
-            offset.width = direction * 600
+            offset = CGSize(width: direction * 600, height: offset.height)
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
